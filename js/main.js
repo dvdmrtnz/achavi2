@@ -1,3 +1,5 @@
+debugger;
+
 import {LeafletMap, TileLayer} from 'leaflet';
 
 const map = new LeafletMap('map').setView([51.505, -0.09], 13);
