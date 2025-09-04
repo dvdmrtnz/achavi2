@@ -5,6 +5,20 @@ html, body {
 	margin: 0;
 }
 
+body {
+    display: flex;
+    flex-direction: column;
+	background: #52514e;
+}
+
+div#controls {
+	padding: 10px;
+	display: flex;
+	gap: 5px;
+	align-items: center;
+}
+
 div#map { 
-	height: 100%;
+	flex: 1;
+	background: #52514e;
 }
