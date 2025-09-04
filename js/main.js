@@ -18,6 +18,60 @@ const tiles = new TileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 // Apply a dark filter to the tile layer
 tiles._container.style.filter = TILE_DARKNESS;
 
+/**
+ * Compare tags in <old> and <new> elements
+ */
+function diffTags(oldElem, newElem) {
+    const oldTags = new Map();
+    const newTags = new Map();
+
+    if (oldElem) {
+        oldElem.querySelectorAll("tag").forEach(tag =>
+            oldTags.set(tag.getAttribute("k"), tag.getAttribute("v"))
+        );
+    }
+    if (newElem) {
+        newElem.querySelectorAll("tag").forEach(tag =>
+            newTags.set(tag.getAttribute("k"), tag.getAttribute("v"))
+        );
+    }
+
+    const changes = [];
+
+    // Removed or changed
+    for (const [k, vOld] of oldTags.entries()) {
+        if (!newTags.has(k)) {
+            changes.push(`<tr><td>${k}</td><td style="color:red;">${vOld}</td><td></td></tr>`);
+        } else {
+            const vNew = newTags.get(k);
+            if (vNew !== vOld) {
+                changes.push(`<tr><td>${k}</td><td style="color:red;">${vOld}</td><td style="color:green;">${vNew}</td></tr>`);
+            }
+        }
+    }
+
+    // Added
+    for (const [k, vNew] of newTags.entries()) {
+        if (!oldTags.has(k)) {
+            changes.push(`<tr><td>${k}</td><td></td><td style="color:green;">${vNew}</td></tr>`);
+        }
+    }
+
+    if (changes.length === 0) {
+        return "<i>No tag changes</i>";
+    }
+
+    return `
+        <table border="1" cellpadding="3">
+            <tr><th>Key</th><th>Old</th><th>New</th></tr>
+            ${changes.join("\n")}
+        </table>
+    `;
+}
+
+/**
+ * Render ADIFF XML onto the map
+ */
 function showAdiffOnMap(adiffXml, map) {
     if (typeof adiffXml === "string") {
         adiffXml = new DOMParser().parseFromString(adiffXml, "application/xml");
@@ -29,6 +83,9 @@ function showAdiffOnMap(adiffXml, map) {
     const actions = adiffXml.querySelectorAll("action");
 
     actions.forEach(action => {
+        const oldContainer = action.querySelector("old");
+        const newContainer = action.querySelector("new");
+
         ["old", "new"].forEach(version => {
             const container = action.querySelector(version);
             if (!container) return;
@@ -47,8 +104,13 @@ function showAdiffOnMap(adiffXml, map) {
                     color: isNew ? COLOR_NEW : COLOR_OLD
                 });
 
-                marker.bindPopup(`<b>Node ${node.getAttribute("id")}</b>`);
-                
+                // Diff tags for this node
+                const oldElem = oldContainer?.querySelector(`node[id="${node.getAttribute("id")}"]`);
+                const newElem = newContainer?.querySelector(`node[id="${node.getAttribute("id")}"]`);
+                const tagDiffHtml = diffTags(oldElem, newElem);
+
+                marker.bindPopup(`<b>Node ${node.getAttribute("id")}</b><br>${tagDiffHtml}`);
+
                 (isNew ? newLayer : oldLayer).addLayer(marker);
             });
 
@@ -64,8 +126,13 @@ function showAdiffOnMap(adiffXml, map) {
                 if (coords.length > 1) {
                     const poly = new Polyline(coords, { color: isNew ? COLOR_NEW : COLOR_OLD , weight: 5 });
 
-                    poly.bindPopup(`<b>Way ${way.getAttribute("id")}</b>`);
+                    // Diff tags for this way
+                    const oldElem = oldContainer?.querySelector(`way[id="${way.getAttribute("id")}"]`);
+                    const newElem = newContainer?.querySelector(`way[id="${way.getAttribute("id")}"]`);
+                    const tagDiffHtml = diffTags(oldElem, newElem);
 
+                    poly.bindPopup(`<b>Way ${way.getAttribute("id")}</b><br>${tagDiffHtml}`);
+                    
                     (isNew ? newLayer : oldLayer).addLayer(poly);
                 }
             });
