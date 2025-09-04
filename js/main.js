@@ -109,7 +109,10 @@ function showAdiffOnMap(adiffXml, map) {
                 const newElem = newContainer?.querySelector(`node[id="${node.getAttribute("id")}"]`);
                 const tagDiffHtml = diffTags(oldElem, newElem);
 
-                marker.bindPopup(`<b>Node ${node.getAttribute("id")}</b><br>${tagDiffHtml}`);
+                marker.bindPopup(`
+                    <b>Node <a href="https://www.openstreetmap.org/node/${node.getAttribute("id")}" target="_blank">${node.getAttribute("id")}</a></b>
+                    <br>${tagDiffHtml}
+                `);
 
                 (isNew ? newLayer : oldLayer).addLayer(marker);
             });
@@ -131,7 +134,10 @@ function showAdiffOnMap(adiffXml, map) {
                     const newElem = newContainer?.querySelector(`way[id="${way.getAttribute("id")}"]`);
                     const tagDiffHtml = diffTags(oldElem, newElem);
 
-                    poly.bindPopup(`<b>Way ${way.getAttribute("id")}</b><br>${tagDiffHtml}`);
+                    poly.bindPopup(`
+                        <b>Way <a href="https://www.openstreetmap.org/way/${way.getAttribute("id")}" target="_blank">${way.getAttribute("id")}</a></b>
+                        <br>${tagDiffHtml}
+                    `);
                     
                     (isNew ? newLayer : oldLayer).addLayer(poly);
                 }
