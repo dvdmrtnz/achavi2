@@ -4,8 +4,11 @@ import {LeafletMap, TileLayer, FeatureGroup, CircleMarker, Polyline} from 'leafl
 
 import {loadChangeset} from './overpass-api.js';
 
-const COLOR_OLD = 'darkred';
-const COLOR_NEW = 'lightgreen';
+const COLOR_CREATED = '#faf797';
+const COLOR_MODIFIED = '#87cefa';
+const COLOR_DELETED = '#ff3333';
+const COLOR_GEOM_OLD = '#8b0000';
+const COLOR_GEOM_NEW = '#90ee90';
 const TILE_DARKNESS = 'brightness(30%)';
 
 const map = new LeafletMap('map').setView([51.505, -0.09], 13);
@@ -99,15 +102,23 @@ function showAdiffOnMap(adiffXml, map) {
 
                 if (isNaN(lat) || isNaN(lon)) return;
 
-                const marker = new CircleMarker([lat, lon], {
-                    radius: 5,
-                    color: isNew ? COLOR_NEW : COLOR_OLD
-                });
+                const oldNode = oldContainer?.querySelector(`node[id="${node.getAttribute("id")}"]`);
+                const newNode = newContainer?.querySelector(`node[id="${node.getAttribute("id")}"]`);
 
-                // Diff tags for this node
-                const oldElem = oldContainer?.querySelector(`node[id="${node.getAttribute("id")}"]`);
-                const newElem = newContainer?.querySelector(`node[id="${node.getAttribute("id")}"]`);
-                const tagDiffHtml = diffTags(oldElem, newElem);
+                const geomChanged = oldNode && newNode
+                    ? parseFloat(oldNode.getAttribute("lat")) !== parseFloat(newNode.getAttribute("lat")) ||
+                      parseFloat(oldNode.getAttribute("lon")) !== parseFloat(newNode.getAttribute("lon"))
+                    : false;
+
+                let color;
+                if (!oldNode) color = COLOR_CREATED;
+                else if (!newNode) color = COLOR_DELETED;
+                else if (geomChanged) color = isNew ? COLOR_GEOM_NEW : COLOR_GEOM_OLD;
+                else color = COLOR_MODIFIED;
+
+                const marker = new CircleMarker([lat, lon], { radius: 5, color });
+
+                const tagDiffHtml = diffTags(oldNode, newNode);
 
                 marker.bindPopup(`
                     <b>Node <a href="https://www.openstreetmap.org/node/${node.getAttribute("id")}" target="_blank">${node.getAttribute("id")}</a></b>
@@ -127,12 +138,25 @@ function showAdiffOnMap(adiffXml, map) {
                 .filter(c => c !== null);
 
                 if (coords.length > 1) {
-                    const poly = new Polyline(coords, { color: isNew ? COLOR_NEW : COLOR_OLD , weight: 5 });
+                    const oldWay = oldContainer?.querySelector(`way[id="${way.getAttribute("id")}"]`);
+                    const newWay = newContainer?.querySelector(`way[id="${way.getAttribute("id")}"]`);
 
-                    // Diff tags for this way
-                    const oldElem = oldContainer?.querySelector(`way[id="${way.getAttribute("id")}"]`);
-                    const newElem = newContainer?.querySelector(`way[id="${way.getAttribute("id")}"]`);
-                    const tagDiffHtml = diffTags(oldElem, newElem);
+                    let geomChanged = true;
+                    if (oldWay && newWay) {
+                        const oldCoords = [...oldWay.querySelectorAll("nd")].map(nd => [parseFloat(nd.getAttribute("lat")), parseFloat(nd.getAttribute("lon"))]);
+                        const newCoords = [...newWay.querySelectorAll("nd")].map(nd => [parseFloat(nd.getAttribute("lat")), parseFloat(nd.getAttribute("lon"))]);
+                        geomChanged = oldCoords.length !== newCoords.length || oldCoords.some((c, i) => c[0] !== newCoords[i][0] || c[1] !== newCoords[i][1]);
+                    }
+
+                    let color;
+                    if (!oldWay) color = COLOR_CREATED;
+                    else if (!newWay) color = COLOR_DELETED;
+                    else if (geomChanged) color = isNew ? COLOR_GEOM_NEW : COLOR_GEOM_OLD;
+                    else color = COLOR_MODIFIED;
+
+                    const poly = new Polyline(coords, { color, weight: 5 });
+                    
+                    const tagDiffHtml = diffTags(oldWay, newWay);
 
                     poly.bindPopup(`
                         <b>Way <a href="https://www.openstreetmap.org/way/${way.getAttribute("id")}" target="_blank">${way.getAttribute("id")}</a></b>
