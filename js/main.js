@@ -23,6 +23,7 @@ tiles._container.style.filter = TILE_DARKNESS;
 
 /**
  * Compare tags in <old> and <new> elements
+ * Always show all tags, even if old or new is missing
  */
 function diffTags(oldElem, newElem) {
     const oldTags = new Map();
@@ -39,35 +40,36 @@ function diffTags(oldElem, newElem) {
         );
     }
 
-    const changes = [];
+    const allKeys = new Set([...oldTags.keys(), ...newTags.keys()]);
+    const rows = [];
 
-    // Removed or changed
-    for (const [k, vOld] of oldTags.entries()) {
-        if (!newTags.has(k)) {
-            changes.push(`<tr><td>${k}</td><td style="color:red;">${vOld}</td><td></td></tr>`);
+    for (const k of allKeys) {
+        const vOld = oldTags.get(k);
+        const vNew = newTags.get(k);
+
+        if (vOld === undefined) {
+            // Only new (created)
+            rows.push(`<tr><td>${k}</td><td></td><td style="color:green;">${vNew}</td></tr>`);
+        } else if (vNew === undefined) {
+            // Only old (deleted)
+            rows.push(`<tr><td>${k}</td><td style="color:red;">${vOld}</td><td></td></tr>`);
+        } else if (vOld !== vNew) {
+            // Changed
+            rows.push(`<tr><td>${k}</td><td style="color:red;">${vOld}</td><td style="color:green;">${vNew}</td></tr>`);
         } else {
-            const vNew = newTags.get(k);
-            if (vNew !== vOld) {
-                changes.push(`<tr><td>${k}</td><td style="color:red;">${vOld}</td><td style="color:green;">${vNew}</td></tr>`);
-            }
+            // Unchanged
+            rows.push(`<tr><td>${k}</td><td>${vOld}</td><td>${vNew}</td></tr>`);
         }
     }
 
-    // Added
-    for (const [k, vNew] of newTags.entries()) {
-        if (!oldTags.has(k)) {
-            changes.push(`<tr><td>${k}</td><td></td><td style="color:green;">${vNew}</td></tr>`);
-        }
-    }
-
-    if (changes.length === 0) {
-        return "<i>No tag changes</i>";
+    if (rows.length === 0) {
+        return "<i>No tags</i>";
     }
 
     return `
         <table border="1" cellpadding="3">
             <tr><th>Key</th><th>Old</th><th>New</th></tr>
-            ${changes.join("\n")}
+            ${rows.join("\n")}
         </table>
     `;
 }
