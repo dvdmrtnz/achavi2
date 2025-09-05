@@ -76,6 +76,80 @@ function diffTags(oldElem, newElem) {
  * Render ADIFF XML onto the map
  */
 function showAdiffOnMap(adiffXml, map) {
+
+    function processContainer(container, isNew) {
+        // nodes
+        container.querySelectorAll("node").forEach(node => {
+            const lat = parseFloat(node.getAttribute("lat"));
+            const lon = parseFloat(node.getAttribute("lon"));
+            if (isNaN(lat) || isNaN(lon)) return;
+
+            const id = node.getAttribute("id");
+            const oldNode = container.closest("action").querySelector("old node[id='" + id + "']");
+            const newNode = container.closest("action").querySelector("new node[id='" + id + "']");
+
+            const geomChanged = oldNode && newNode &&
+                (parseFloat(oldNode.getAttribute("lat")) !== parseFloat(newNode.getAttribute("lat")) ||
+                parseFloat(oldNode.getAttribute("lon")) !== parseFloat(newNode.getAttribute("lon")));
+
+            let color;
+            if (!oldNode) color = COLOR_CREATED;
+            else if (!newNode) color = COLOR_DELETED;
+            else if (geomChanged) color = isNew ? COLOR_GEOM_NEW : COLOR_GEOM_OLD;
+            else color = COLOR_MODIFIED;
+
+            const marker = new CircleMarker([lat, lon], { radius: 5, color });
+            const tagDiffHtml = diffTags(oldNode, newNode);
+
+            marker.bindPopup(`
+                <b>Node <a href="https://www.openstreetmap.org/node/${id}" target="_blank">${id}</a></b>
+                <br>${tagDiffHtml}
+            `);
+
+            (isNew ? newLayer : oldLayer).addLayer(marker);
+        });
+
+        // ways (same as before)
+        container.querySelectorAll("way").forEach(way => {
+            const coords = [...way.querySelectorAll("nd")]
+                .map(nd => {
+                    const lat = parseFloat(nd.getAttribute("lat"));
+                    const lon = parseFloat(nd.getAttribute("lon"));
+                    return isNaN(lat) || isNaN(lon) ? null : [lat, lon];
+                })
+                .filter(c => c !== null);
+
+            if (coords.length > 1) {
+                const id = way.getAttribute("id");
+                const oldWay = container.closest("action").querySelector("old way[id='" + id + "']");
+                const newWay = container.closest("action").querySelector("new way[id='" + id + "']");
+
+                let geomChanged = true;
+                if (oldWay && newWay) {
+                    const oldCoords = [...oldWay.querySelectorAll("nd")].map(nd => [parseFloat(nd.getAttribute("lat")), parseFloat(nd.getAttribute("lon"))]);
+                    const newCoords = [...newWay.querySelectorAll("nd")].map(nd => [parseFloat(nd.getAttribute("lat")), parseFloat(nd.getAttribute("lon"))]);
+                    geomChanged = oldCoords.length !== newCoords.length || oldCoords.some((c, i) => c[0] !== newCoords[i][0] || c[1] !== newCoords[i][1]);
+                }
+
+                let color;
+                if (!oldWay) color = COLOR_CREATED;
+                else if (!newWay) color = COLOR_DELETED;
+                else if (geomChanged) color = isNew ? COLOR_GEOM_NEW : COLOR_GEOM_OLD;
+                else color = COLOR_MODIFIED;
+
+                const poly = new Polyline(coords, { color, weight: 5 });
+                const tagDiffHtml = diffTags(oldWay, newWay);
+
+                poly.bindPopup(`
+                    <b>Way <a href="https://www.openstreetmap.org/way/${id}" target="_blank">${id}</a></b>
+                    <br>${tagDiffHtml}
+                `);
+
+                (isNew ? newLayer : oldLayer).addLayer(poly);
+            }
+        });
+    }
+
     if (typeof adiffXml === "string") {
         adiffXml = new DOMParser().parseFromString(adiffXml, "application/xml");
     }
@@ -92,81 +166,14 @@ function showAdiffOnMap(adiffXml, map) {
         ["old", "new"].forEach(version => {
             const container = action.querySelector(version);
             if (!container) return;
-
-            const isNew = version === "new";
-
-            // nodes
-            container.querySelectorAll("node").forEach(node => {
-                const lat = parseFloat(node.getAttribute("lat"));
-                const lon = parseFloat(node.getAttribute("lon"));
-
-                if (isNaN(lat) || isNaN(lon)) return;
-
-                const oldNode = oldContainer?.querySelector(`node[id="${node.getAttribute("id")}"]`);
-                const newNode = newContainer?.querySelector(`node[id="${node.getAttribute("id")}"]`);
-
-                const geomChanged = oldNode && newNode
-                    ? parseFloat(oldNode.getAttribute("lat")) !== parseFloat(newNode.getAttribute("lat")) ||
-                      parseFloat(oldNode.getAttribute("lon")) !== parseFloat(newNode.getAttribute("lon"))
-                    : false;
-
-                let color;
-                if (!oldNode) color = COLOR_CREATED;
-                else if (!newNode) color = COLOR_DELETED;
-                else if (geomChanged) color = isNew ? COLOR_GEOM_NEW : COLOR_GEOM_OLD;
-                else color = COLOR_MODIFIED;
-
-                const marker = new CircleMarker([lat, lon], { radius: 5, color });
-
-                const tagDiffHtml = diffTags(oldNode, newNode);
-
-                marker.bindPopup(`
-                    <b>Node <a href="https://www.openstreetmap.org/node/${node.getAttribute("id")}" target="_blank">${node.getAttribute("id")}</a></b>
-                    <br>${tagDiffHtml}
-                `);
-
-                (isNew ? newLayer : oldLayer).addLayer(marker);
-            });
-
-            // ways
-            container.querySelectorAll("way").forEach(way => {
-                const coords = [...way.querySelectorAll("nd")].map(nd => {
-                    const lat = parseFloat(nd.getAttribute("lat"));
-                    const lon = parseFloat(nd.getAttribute("lon"));
-                    return isNaN(lat) || isNaN(lon) ? null : [lat, lon];
-                })
-                .filter(c => c !== null);
-
-                if (coords.length > 1) {
-                    const oldWay = oldContainer?.querySelector(`way[id="${way.getAttribute("id")}"]`);
-                    const newWay = newContainer?.querySelector(`way[id="${way.getAttribute("id")}"]`);
-
-                    let geomChanged = true;
-                    if (oldWay && newWay) {
-                        const oldCoords = [...oldWay.querySelectorAll("nd")].map(nd => [parseFloat(nd.getAttribute("lat")), parseFloat(nd.getAttribute("lon"))]);
-                        const newCoords = [...newWay.querySelectorAll("nd")].map(nd => [parseFloat(nd.getAttribute("lat")), parseFloat(nd.getAttribute("lon"))]);
-                        geomChanged = oldCoords.length !== newCoords.length || oldCoords.some((c, i) => c[0] !== newCoords[i][0] || c[1] !== newCoords[i][1]);
-                    }
-
-                    let color;
-                    if (!oldWay) color = COLOR_CREATED;
-                    else if (!newWay) color = COLOR_DELETED;
-                    else if (geomChanged) color = isNew ? COLOR_GEOM_NEW : COLOR_GEOM_OLD;
-                    else color = COLOR_MODIFIED;
-
-                    const poly = new Polyline(coords, { color, weight: 5 });
-                    
-                    const tagDiffHtml = diffTags(oldWay, newWay);
-
-                    poly.bindPopup(`
-                        <b>Way <a href="https://www.openstreetmap.org/way/${way.getAttribute("id")}" target="_blank">${way.getAttribute("id")}</a></b>
-                        <br>${tagDiffHtml}
-                    `);
-                    
-                    (isNew ? newLayer : oldLayer).addLayer(poly);
-                }
-            });
+            processContainer(container, version === "new");
         });
+
+        if (!oldContainer && !newContainer) {
+            const type = action.getAttribute("type"); // create, modify, delete
+            const isNew = type === "create";
+            processContainer(action, isNew);
+        }
     });
 
     oldLayer.addTo(map);
